@@ -28,12 +28,12 @@ void InitESPNow() {
   }
 }
 
-// Scan for slaves in AP mode
-void ScanForSlave() {
+// Scan for gateways in AP mode
+void ScanForgateway() {
   int16_t scanResults = WiFi.scanNetworks(false, false, false, 300, ESPNOW_CHANNEL); // Scan only on one channel
   // reset on each scan
-  bool slaveFound = 0;
-  memset(&slave, 0, sizeof(slave));
+  bool gatewayFound = 0;
+  memset(&gateway, 0, sizeof(gateway));
 
   Serial.println("");
   if (scanResults == 0) {
@@ -56,58 +56,58 @@ void ScanForSlave() {
         Serial.println("");
       }
       delay(10);
-      // Check if the current device starts with `Slave`
+      // Check if the current device starts with `gateway`
       if (SSID.indexOf("Gateway-") == 0) {
         // SSID of interest
-        Serial.println("Found a Slave.");
+        Serial.println("Found a gateway.");
         Serial.print(i + 1); Serial.print(": "); Serial.print(SSID); Serial.print(" ["); Serial.print(BSSIDstr); Serial.print("]"); Serial.print(" ("); Serial.print(RSSI); Serial.print(")"); Serial.println("");
-        // Get BSSID => Mac Address of the Slave
+        // Get BSSID => Mac Address of the gateway
         int mac[6];
         if ( 6 == sscanf(BSSIDstr.c_str(), "%x:%x:%x:%x:%x:%x",  &mac[0], &mac[1], &mac[2], &mac[3], &mac[4], &mac[5] ) ) {
           for (int ii = 0; ii < 6; ++ii ) {
-            slave.peer_addr[ii] = (uint8_t) mac[ii];
+            gateway.peer_addr[ii] = (uint8_t) mac[ii];
           }
         }
 
-        slave.channel = ESPNOW_CHANNEL; // pick a channel
-        slave.encrypt = 0; // no encryption
+        gateway.channel = ESPNOW_CHANNEL; // pick a channel
+        gateway.encrypt = 0; // no encryption
 
-        slaveFound = 1;
-        // we are planning to have only one slave in this example;
+        gatewayFound = 1;
+        // we are planning to have only one gateway in this example;
         // Hence, break after we find one, to be a bit efficient
         break;
       }
     }
   }
 
-  if (slaveFound) {
-    Serial.println("Slave Found, processing..");
+  if (gatewayFound) {
+    Serial.println("gateway Found, processing..");
   } else {
-    Serial.println("Slave Not Found, trying again.");
+    Serial.println("gateway Not Found, trying again.");
   }
 
   // clean up ram
   WiFi.scanDelete();
 }
 
-// Check if the slave is already paired with the master.
-// If not, pair the slave with master
-bool manageSlave() {
-  if (slave.channel == ESPNOW_CHANNEL) {
+// Check if the gateway is already paired with the master.
+// If not, pair the gateway with master
+bool managegateway() {
+  if (gateway.channel == ESPNOW_CHANNEL) {
     if (DELETEBEFOREPAIR) {
       deletePeer();
     }
 
-    Serial.print("Slave Status: ");
+    Serial.print("gateway Status: ");
     // check if the peer exists
-    bool exists = esp_now_is_peer_exist(slave.peer_addr);
+    bool exists = esp_now_is_peer_exist(gateway.peer_addr);
     if ( exists) {
-      // Slave already paired.
+      // gateway already paired.
       Serial.println("Already Paired");
       return true;
     } else {
-      // Slave not paired, attempt pair
-      esp_err_t addStatus = esp_now_add_peer(&slave);
+      // gateway not paired, attempt pair
+      esp_err_t addStatus = esp_now_add_peer(&gateway);
       if (addStatus == ESP_OK) {
         // Pair success
         Serial.println("Pair success");
@@ -134,15 +134,15 @@ bool manageSlave() {
       }
     }
   } else {
-    // No slave found to process
-    Serial.println("No Slave found to process");
+    // No gateway found to process
+    Serial.println("No gateway found to process");
     return false;
   }
 }
 
 void deletePeer() {
-  esp_err_t delStatus = esp_now_del_peer(slave.peer_addr);
-  Serial.print("Slave Delete Status: ");
+  esp_err_t delStatus = esp_now_del_peer(gateway.peer_addr);
+  Serial.print("gateway Delete Status: ");
   if (delStatus == ESP_OK) {
     // Delete success
     Serial.println("Success");
@@ -162,7 +162,7 @@ void deletePeer() {
 void sendData() {
   readSensorTH();
   DEBUG_PRINTF("Temp= %.1f, battery= %d, humidity=%.1f, HW_REV=%d, sensor_profile=%d\n", SensorTempHumid.temperature, SensorTempHumid.batteryPercentage, SensorTempHumid.humidity,SensorTempHumid.hwRev,SensorTempHumid.sensorProfile);
-  const uint8_t *peer_addr = slave.peer_addr;
+  const uint8_t *peer_addr = gateway.peer_addr;
   esp_err_t result = esp_now_send(peer_addr, (uint8_t*)&SensorTempHumid, sizeof(SensorTempHumid));
   Serial.print("Send Status: ");
   if (result == ESP_OK) {
@@ -209,7 +209,7 @@ void storeAndSleep()
 }
 
 
-// callback when data is sent from Master to Slave
+// callback when data is sent from Master to gateway
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   char macStr[18];
   snprintf(macStr, sizeof(macStr), "%02x:%02x:%02x:%02x:%02x:%02x",
@@ -235,25 +235,25 @@ void setup() {
 }
 
 void loop() {
-  // In the loop we scan for slave
-  ScanForSlave();
-  // If Slave is found, it would be populate in `slave` variable
-  // We will check if `slave` is defined and then we proceed further
-  if (slave.channel == ESPNOW_CHANNEL) { // check if slave channel is defined
-    // `slave` is defined
-    // Add slave as peer if it has not been added already
-    bool isPaired = manageSlave();
+  // In the loop we scan for gateway
+  ScanForgateway();
+  // If gateway is found, it would be populate in `gateway` variable
+  // We will check if `gateway` is defined and then we proceed further
+  if (gateway.channel == ESPNOW_CHANNEL) { // check if gateway channel is defined
+    // `gateway` is defined
+    // Add gateway as peer if it has not been added already
+    bool isPaired = managegateway();
     if (isPaired) {
       // pair success or already paired
       // Send data to device
       sendData();
     } else {
-      // slave pair failed
-      Serial.println("Slave pair failed!");
+      // gateway pair failed
+      Serial.println("gateway pair failed!");
     }
   }
   else {
-    // No slave found to process
+    // No gateway found to process
   }
 
 storeAndSleep();
